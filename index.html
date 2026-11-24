@@ -566,8 +566,10 @@
     if (!W || !Array.isArray(W.items)) return false;
     try { localStorage.setItem('seeded-v1', '1'); } catch {}
     if (pref('works') === String(W.v)) return true;
+    const firstTime = !pref('works');   // a page that already had works before works.js existed: only add, never move or change its own
     W.items.forEach(w => {
       let it = items.find(i => i.id === w.id);
+      if (it && firstTime) return;
       if (it) {
         Object.assign(it, w);
         const old = els.get(it.id); if (old) { old.remove(); els.delete(it.id); }
