@@ -148,7 +148,7 @@
   document.documentElement.dataset.mode = mode;
   const els = new Map();
 
-  /* ---------- zoom (freedom view): two-finger swipe up = closer, down = further; pinch works too ---------- */
+  /* ---------- view (freedom view): two fingers slide it any direction; pinch zooms ---------- */
   let zs = 1, ztx = 0, zty = 0;
   const toStage = (cx, cy) => ({ x: (cx - ztx) / zs, y: (cy - zty) / zs });   // screen point → point on the unzoomed page
   function applyZoom() { stage.style.transform = zs === 1 && !ztx && !zty ? '' : `translate(${ztx}px,${zty}px) scale(${zs})`; }
@@ -156,8 +156,16 @@
   addEventListener('wheel', e => {
     if (mode !== 'free') return;              // the grid scrolls normally
     e.preventDefault();
+    // two fingers moving = slide the view in any direction; pinch (or ⌘ + two fingers) = zoom
+    if (!e.ctrlKey && !e.metaKey) {
+      const px = e.deltaMode === 1 ? 16 : 1;   // some mice report lines, not pixels
+      ztx -= (e.shiftKey && !e.deltaX ? e.deltaY : e.deltaX) * px;
+      zty -= (e.shiftKey && !e.deltaX ? 0 : e.deltaY) * px;
+      applyZoom();
+      return;
+    }
     const d = clamp(e.deltaY, -40, 40);       // a mouse wheel click is a big jump; keep each step gentle
-    const k = e.ctrlKey ? Math.exp(-d * 0.01) : Math.exp(d * 0.003);
+    const k = e.ctrlKey ? Math.exp(-d * 0.01) : Math.exp(d * 0.003);   // ⌘ + swipe up = closer
     const ns = clamp(zs * k, 0.3, 4);
     ztx = e.clientX - (e.clientX - ztx) * ns / zs;   // zoom around the cursor
     zty = e.clientY - (e.clientY - zty) * ns / zs;
