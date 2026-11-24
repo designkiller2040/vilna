@@ -121,7 +121,7 @@
   <span id="shuffle-wrap"><button id="shuffle" title="scatter everything again">shuffle</button><button id="shuffle-auto" role="switch" aria-checked="false" aria-label="shuffle on every reload" title="shuffle on every reload"></button></span>
 </div>
 
-<script src="works.js"></script>
+<script>document.write('<script src="works.js?' + Date.now() + '"><\/script>');   // always the newest works, never a browser-cached copy</script>
 <script>
 (() => {
   const CW = 90, PAD = 24, BOT = 110, EST_H = 140;
