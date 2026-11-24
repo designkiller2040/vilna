@@ -70,13 +70,14 @@
   body.filedrag #veil{opacity:1}
 
   /* ---------- text notes: click on empty space and write ---------- */
-  .card .note{width:90px;aspect-ratio:1;background:#e8e6e5;padding:7px;font-size:8px;line-height:1.25;color:#3d3b3b;white-space:pre-wrap;overflow:hidden;overflow-wrap:anywhere;pointer-events:none}
-  #editor{position:fixed;z-index:100001;width:min(300px,calc(100vw - 32px));height:min(300px,calc(100vh - 32px));background:#e8e6e5;border:1px solid #8a8fd0;border-radius:4px;display:none}
-  #editor.open{display:block;animation:pop .15s both}
-  #editor.full{left:24px !important;top:24px !important;width:calc(100vw - 48px);height:calc(100vh - 48px)}
-  #editor textarea{display:block;width:100%;height:100%;margin:0;border:0;outline:0;background:none;resize:none;padding:20px 52px 20px 20px;font:inherit;font-size:22px;line-height:1.3;color:#3d3b3b}
-  #editor .ex{position:absolute;top:14px;right:14px;width:26px;height:26px;padding:4px;border:0;background:none;cursor:pointer}
-  #editor .ex svg{display:block;width:100%;height:100%}
+  .card .note{width:90px;max-height:120px;background:#fff;border:1px solid #cfcfcf;padding:7px;font-size:8px;line-height:1.25;color:var(--ink);white-space:pre-wrap;overflow:hidden;overflow-wrap:anywhere;pointer-events:none}
+  html{cursor:text}
+  nav button,#tools button,#add,html[data-mode="grid"] .card{cursor:pointer}
+  /* writing: no box at all, just the words where you clicked */
+  #editor{position:fixed;z-index:100001;display:none}
+  #editor.open{display:block}
+  #editor textarea{display:block;margin:0;padding:0;border:0;outline:0;background:none;resize:none;overflow:hidden;font:inherit;font-size:18px;line-height:1.3;color:var(--ink);caret-color:var(--ink)}
+  #editor .ex{display:none}
 
   /* ---------- add button + phones/tablets ---------- */
   #add{display:none;position:fixed;right:16px;bottom:calc(14px + env(safe-area-inset-bottom));width:48px;height:48px;padding:0;border:1.5px solid #e2e2e2;border-radius:50%;background:none;cursor:pointer;z-index:100000;mix-blend-mode:difference;place-items:center}
@@ -348,17 +349,19 @@
   function openEditor(it, x, y) {
     editing = it; editPt = { x, y };
     ta.value = it ? it.text || '' : '';
-    editor.classList.remove('full');
     editor.classList.add('open');
-    const w = editor.offsetWidth, h = editor.offsetHeight;
+    // the first line starts right where you clicked; the writing area runs to the right, up to 320px
+    const w = Math.min(320, innerWidth - 32);
+    ta.style.width = w + 'px';
     editor.style.left = clamp(x, 16, innerWidth - w - 16) + 'px';
-    editor.style.top = clamp(y, 16, innerHeight - h - 16) + 'px';
+    editor.style.top = clamp(y - 12, 16, innerHeight - 60) + 'px';
+    grow();
     ta.focus();
     ta.setSelectionRange(ta.value.length, ta.value.length);
   }
   function closeEditor() {
     if (!isOpen()) return;
-    editor.classList.remove('open', 'full');
+    editor.classList.remove('open');
     ta.blur();
     const text = ta.value.replace(/\s+$/, '');
     if (editing) {
@@ -378,7 +381,8 @@
     }
     editing = null;
   }
-  editor.querySelector('.ex').addEventListener('click', () => { editor.classList.toggle('full'); ta.focus(); });
+  function grow() { ta.style.height = 'auto'; ta.style.height = ta.scrollHeight + 'px'; }
+  ta.addEventListener('input', grow);
   ta.addEventListener('keydown', e => {
     if (e.key === 'Escape' || (e.key === 'Enter' && (e.metaKey || e.ctrlKey))) { e.preventDefault(); closeEditor(); }
   });
