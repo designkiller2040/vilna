@@ -566,10 +566,16 @@
     if (!W || !Array.isArray(W.items)) return false;
     try { localStorage.setItem('seeded-v1', '1'); } catch {}
     if (pref('works') === String(W.v)) return true;
-    const firstTime = !pref('works');   // a page that already had works before works.js existed: only add, never move or change its own
+    // works.js is the selection: published pictures that aren't in it go away, and a picture kept only
+    // in this browser that has since been published (same file name) is swapped for the published one
+    const ids = new Set(W.items.map(w => w.id)), names = new Set(W.items.map(w => w.name));
+    items.filter(i => (i.src && !ids.has(i.id)) || (i.blob && names.has(i.name))).forEach(i => {
+      const el = els.get(i.id); if (el) { el.remove(); els.delete(i.id); }
+      remove(i.id);
+    });
+    items = items.filter(i => els.has(i.id));
     W.items.forEach(w => {
       let it = items.find(i => i.id === w.id);
-      if (it && firstTime) return;
       if (it) {
         Object.assign(it, w);
         const old = els.get(it.id); if (old) { old.remove(); els.delete(it.id); }
