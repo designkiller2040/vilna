@@ -117,9 +117,11 @@
 <div id="tools">
   <button id="sort-added" title="newest added first">date added</button>
   <button id="sort-created" title="by the date in the picture's metadata" hidden>date created</button>
+  <button id="export" title="save all pictures and notes on this page as a file">export</button>
   <span id="shuffle-wrap"><button id="shuffle" title="scatter everything again">shuffle</button><button id="shuffle-auto" role="switch" aria-checked="false" aria-label="shuffle on every reload" title="shuffle on every reload"></button></span>
 </div>
 
+<script src="works.js"></script>
 <script>
 (() => {
   const CW = 90, PAD = 24, BOT = 110, EST_H = 140;
@@ -557,6 +559,46 @@
     ['blue-clouds','do'],['blue-noise-1','do'],['blue-noise-2','do'],['tree','see']
   ];
   const seedBase = Date.now();
+  // works.js holds the shared pictures and notes: every copy of the site (file, preview, live) shows them.
+  // A newer works.js updates those items; things added only in this browser are kept.
+  function mergeWorks() {
+    const W = window.WORKS;
+    if (!W || !Array.isArray(W.items)) return false;
+    try { localStorage.setItem('seeded-v1', '1'); } catch {}
+    if (pref('works') === String(W.v)) return true;
+    W.items.forEach(w => {
+      let it = items.find(i => i.id === w.id);
+      if (it) {
+        Object.assign(it, w);
+        const old = els.get(it.id); if (old) { old.remove(); els.delete(it.id); }
+      } else {
+        it = { rot: 0, title: '', ...w };
+        items.push(it);
+      }
+      zTop = Math.max(zTop, it.z || 1);
+      save(it); makeCard(it);
+    });
+    pref('works', W.v);
+    return true;
+  }
+
+  // export: saves everything on this page (pictures included) as one file, which import-works.py turns into works.js
+  async function exportWorks() {
+    const toUrl = b => new Promise(r => { const f = new FileReader(); f.onload = () => r(f.result); f.readAsDataURL(b); });
+    const out = [];
+    for (const it of items) {
+      const { blob, _gx, _gy, ...rest } = it;
+      if (blob) rest.dataUrl = await toUrl(blob);
+      out.push(rest);
+    }
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([JSON.stringify({ exported: new Date().toISOString(), items: out })], { type: 'application/json' }));
+    a.download = 'vilna-works.json';
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  }
+  document.getElementById('export').addEventListener('click', exportWorks);
+
   function seed() {
     try { if (localStorage.getItem('seeded-v1')) return; localStorage.setItem('seeded-v1', '1'); } catch { return; }
     SEED.forEach(([name, tag]) => {
@@ -573,10 +615,10 @@
       pref('ymap2', '1');
     }
     items.forEach(it => { zTop = Math.max(zTop, it.z || 1); makeCard(it); });
-    seed();
+    if (!mergeWorks()) seed();
     if (pref('autoshuffle') === '1') shuffleAll(false);
     refresh();
-  }).catch(() => { seed(); refresh(); }).finally(() => requestAnimationFrame(() => requestAnimationFrame(() => document.documentElement.classList.remove('booting'))));
+  }).catch(() => { if (!mergeWorks()) seed(); refresh(); }).finally(() => requestAnimationFrame(() => requestAnimationFrame(() => document.documentElement.classList.remove('booting'))));
 })();
 </script>
 </body>
