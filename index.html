@@ -30,7 +30,7 @@
   /* menu, logo and small texts: white + difference blend = they invert whatever is underneath */
   nav,footer,#tools{mix-blend-mode:difference;--ink:#e2e2e2;--muted:#646464}   /* #e2e2e2 on #f1f1f1 → #0f0f0f */
   footer img{filter:invert(1) brightness(.886);width:55px;height:auto;display:block;user-select:none;-webkit-user-drag:none}
-  #stage{position:absolute;top:0;left:0;width:100%}
+  #stage{position:absolute;top:0;left:0;width:100%;transform-origin:0 0}
   html[data-mode="free"] #stage{position:fixed;inset:0;height:auto !important}
   .card{position:absolute;width:90px;margin:0;transition:opacity .3s,filter .3s,left .5s cubic-bezier(.2,.8,.2,1),top .5s cubic-bezier(.2,.8,.2,1);cursor:default;user-select:none;animation:pop .3s both}
   html[data-mode="free"] .card{cursor:grab;touch-action:none}
@@ -145,6 +145,23 @@
   if (pref('sort') === 'created') sortBy = 'created';
   document.documentElement.dataset.mode = mode;
   const els = new Map();
+
+  /* ---------- zoom (freedom view): two-finger swipe up = closer, down = further; pinch works too ---------- */
+  let zs = 1, ztx = 0, zty = 0;
+  const toStage = (cx, cy) => ({ x: (cx - ztx) / zs, y: (cy - zty) / zs });   // screen point → point on the unzoomed page
+  function applyZoom() { stage.style.transform = zs === 1 && !ztx && !zty ? '' : `translate(${ztx}px,${zty}px) scale(${zs})`; }
+  function resetZoom() { zs = 1; ztx = zty = 0; applyZoom(); }
+  addEventListener('wheel', e => {
+    if (mode !== 'free') return;              // the grid scrolls normally
+    e.preventDefault();
+    const d = clamp(e.deltaY, -40, 40);       // a mouse wheel click is a big jump; keep each step gentle
+    const k = e.ctrlKey ? Math.exp(-d * 0.01) : Math.exp(d * 0.003);
+    const ns = clamp(zs * k, 0.3, 4);
+    ztx = e.clientX - (e.clientX - ztx) * ns / zs;   // zoom around the cursor
+    zty = e.clientY - (e.clientY - zty) * ns / zs;
+    zs = ns;
+    applyZoom();
+  }, { passive: false });
 
   /* ---------- storage (IndexedDB, so images survive reloads) ---------- */
   const dbp = new Promise((res, rej) => {
@@ -289,14 +306,15 @@
       e.preventDefault();
       el._moved = false;
       const r = el.getBoundingClientRect();
-      const gx = e.clientX - r.left, gy = e.clientY - r.top;
+      const gx = (e.clientX - r.left) / zs, gy = (e.clientY - r.top) / zs;   // grab point, in unzoomed page pixels
       it.z = ++zTop; el.style.zIndex = it.z;
       el.classList.add('dragging'); el.setPointerCapture(e.pointerId);
       const move = ev => {
         const W = innerWidth, H = innerHeight, h = CARDH;
         if (Math.abs(ev.clientX - e.clientX) + Math.abs(ev.clientY - e.clientY) > 6) el._moved = true;
-        it.x = clamp((ev.clientX - gx - PAD) / Math.max(1, W - 2 * PAD - CW));
-        it.y = clamp((ev.clientY - gy - TOP) / span(h));
+        const p = toStage(ev.clientX, ev.clientY);
+        it.x = clamp((p.x - gx - PAD) / Math.max(1, W - 2 * PAD - CW));
+        it.y = clamp((p.y - gy - TOP) / span(h));
         place(el, it);
       };
       const up = () => {
@@ -315,7 +333,7 @@
       if (it.kind === 'note' && (!touch || el.classList.contains('sel'))) {
         el.classList.remove('sel');
         const r = el.getBoundingClientRect();
-        openEditor(it, r.left + NOTE_IN, r.top + NOTE_IN);
+        openEditor(it, r.left + NOTE_IN * zs, r.top + NOTE_IN * zs);
         return;
       }
       if (!touch) return;
@@ -374,8 +392,9 @@
     } else if (text.trim()) {
       const it = { id: crypto.randomUUID(), kind: 'note', text, tag: filter || 'do', t: Date.now(), title: '', name: '', rot: 0, z: ++zTop, ...spot(items) };
       if (mode === 'free') {   // the box forms around the words, where they were written
-        it.x = clamp((editPt.x - NOTE_IN - PAD) / Math.max(1, innerWidth - 2 * PAD - CW));
-        it.y = clamp((editPt.y - NOTE_IN - TOP) / span(CARDH));
+        const p = toStage(editPt.x, editPt.y);
+        it.x = clamp((p.x - NOTE_IN - PAD) / Math.max(1, innerWidth - 2 * PAD - CW));
+        it.y = clamp((p.y - NOTE_IN - TOP) / span(CARDH));
       }
       items.push(it); save(it); makeCard(it); refresh();
     }
@@ -450,8 +469,9 @@
       const blob = await shrink(imgs[i]);
       const it = { id: crypto.randomUUID(), tag, t: Date.now() + i, c: created, title: '', name: imgs[i].name.replace(/\.[^.]+$/, ''), blob, rot: 0, z: ++zTop, ...spot(items) };
       if (pt && i === 0) {
-        it.x = clamp((pt.x - CW / 2 - PAD) / Math.max(1, innerWidth - 2 * PAD - CW));
-        it.y = clamp((pt.y - 60 - TOP) / span(EST_H));
+        const p = toStage(pt.x, pt.y);
+        it.x = clamp((p.x - CW / 2 - PAD) / Math.max(1, innerWidth - 2 * PAD - CW));
+        it.y = clamp((p.y - 60 - TOP) / span(EST_H));
       }
       items.push(it); save(it);
       makeCard(it, i === imgs.length - 1);
@@ -516,6 +536,7 @@
   const modeBtn = document.getElementById('freedom');
   function setMode(m) {
     mode = m; pref('mode', m); pref('sort', sortBy);
+    resetZoom();
     document.documentElement.dataset.mode = mode;
     modeBtn.textContent = mode === 'free' ? 'organize' : 'freedom';
     modeBtn.title = mode === 'free' ? 'line the pictures up in a grid' : 'scatter the pictures and move them around';
